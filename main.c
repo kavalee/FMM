@@ -1,3 +1,6 @@
+/* Written by Aaron Kavaler aakavalee@gmail.com,
+ * algorithm from https://math.berkeley.edu/~strain/128b.S20/fmm1.pdf */
+
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
