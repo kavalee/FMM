@@ -4,42 +4,23 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
-#include <time.h>
+
+#include "fmm.h"
+#include "util.h"
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 
-typedef struct CauchyMultiplier{
-    double* s;
-    double* t;
-    double* g;
-    int n;
-    int p;
-    double sMin;
-    double sMax;
-    double tMin;
-    double tMax;
-    double sH;
-    double tH;
-    double** BINOMIAL_CACHE;
-    unsigned long adds;
-    unsigned long muls;
-
-
-} CauchyMultiplier;
-
 int inline getSCell(CauchyMultiplier* cm, double s, int Q) {
     cm->adds++;
     cm->muls += 2;
-    double x = (s - cm->sMin)/cm->sH;
-    return MAX( MIN( (int) (x * Q), (Q - 1)), 0 );
+    return (int) (s * Q);
 }
 int inline getTCell(CauchyMultiplier* cm, double t, int Q) {
     cm->adds++;
     cm->muls += 2;
-    double x = (t - cm->tMin)/cm->tH;
-    return MAX( MIN( (int) (x * Q), (Q - 1) ), 0);
+    return (int) (t * Q);
 
 }
 
@@ -53,23 +34,14 @@ double* slowMultiply(CauchyMultiplier* cm) {
     return f;
 }
 
-
-void printMatrix(double** m, int rows, int cols) {
-    printf("\n");
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            printf("%.4e ", m[r][c]);
-        }
-        printf("\n");
-    }
-}
-void computeTMoment(CauchyMultiplier* cm, double** tMoments, int ti, int si, double* cen, double** sMoments) {
-    double tcsI = 1.0 / (cen[ti] - cen[si]);
+void computeTMoment(CauchyMultiplier* cm, double** tMoments, int ti, int si, double* tCen, double* sCen, double** sMoments) {
+    double tcsI = 1.0 / (tCen[ti] - sCen[si]);
     double powM = 1;
     for (int m = 0; m < cm->p; m++) {
         double powK = tcsI;
         for (int k = 0; k < cm->p; k++) {
-            tMoments[ti][m] += cm->BINOMIAL_CACHE[m + k][k] * powK * powM * sMoments[si][k];
+            tMoments[ti][m] += (cm->BINOMIAL_CACHE[m + k][k] * powK ) * ( powM * sMoments[si][k] ) ;
+            //tMoments[ti][m] += cm->BINOMIAL_CACHE[m + k][k] * pow(tCen[ti] - sCen[si], -k - m - 1) * sMoments[si][k];
             cm->adds += 2;
             cm->muls += 2 + m + k - 1;
             powK *= tcsI;
@@ -86,9 +58,13 @@ void computeDirect(CauchyMultiplier* cm, double* f, int sSize, int* sIndex, int 
         }
     }
 }
-int** createReverseIndex(CauchyMultiplier* cm, double* s, int Q,  int* sCellSizes) {
+int** createReverseIndex(CauchyMultiplier* cm, double* s, int Q,  int* sCellSizes, int sFlag) {
     for (int i = 0; i < cm->n; i++) {
-        sCellSizes[getSCell(cm, s[i], Q)]++;
+        if (sFlag == 0) {
+            sCellSizes[getSCell(cm, s[i], Q)]++;
+        } else {
+            sCellSizes[getTCell(cm, s[i], Q)]++;
+        }
     }
     int** reverseIndex = calloc(Q, sizeof(int*));
     for (int si = 0; si < Q; si++) {
@@ -96,7 +72,7 @@ int** createReverseIndex(CauchyMultiplier* cm, double* s, int Q,  int* sCellSize
     }
     int* tempCellSizes = calloc(Q, sizeof(int));
     for (int i = 0; i < cm->n; i++) {
-        int cell = getSCell(cm, s[i], Q);
+        int cell = (sFlag == 0) ? getSCell(cm, s[i], Q) : getTCell(cm , s[i], Q);
         reverseIndex[cell][tempCellSizes[cell]] = i;
         tempCellSizes[cell]++;
     }
@@ -111,7 +87,6 @@ double* fastMultiply(CauchyMultiplier* cm) {
     }
 
     double *f = calloc(cm->n, sizeof(double));
-
     cm->sMin = cm->s[0];
     cm->sMax = cm->s[0];
     cm->tMin = cm->t[0];
@@ -130,22 +105,28 @@ double* fastMultiply(CauchyMultiplier* cm) {
         int Q = 2 << (l - 1);
 
         int *sCellSizes = calloc(Q, sizeof(int));
-        int **sReverseIndex = createReverseIndex(cm, cm->s, Q, sCellSizes);
+        int **sReverseIndex = createReverseIndex(cm, cm->s, Q, sCellSizes, 0);
         int *tCellSizes = calloc(Q, sizeof(int));
-        int **tReverseIndex = createReverseIndex(cm, cm->t, Q, tCellSizes);
+        int **tReverseIndex = createReverseIndex(cm, cm->t, Q, tCellSizes, 1);
 
-        double *cen = calloc(Q, sizeof(double));
+        double *sCen = calloc(Q, sizeof(double));
         cm->adds += Q;
         cm->muls += 3 * Q;
         for (int si = 0; si < Q; si++) {
-            cen[si] = (double) si / ((double) Q) + 1.0 / (double) (2.0 * Q);
+            sCen[si] = ((double) si / ((double) Q) + 1.0 / (double) (2.0 * Q));
+        }
+        double *tCen = calloc(Q, sizeof(double));
+        cm->adds += Q;
+        cm->muls += 3 * Q;
+        for (int ti = 0; ti < Q; ti++) {
+            tCen[ti] = ((double) ti / ((double) Q) + 1.0 / (double) (2.0 * Q));
         }
 
         double **sPowers = calloc(cm->n, sizeof(double *));
         for (int i = 0; i < cm->n; i++) {
             sPowers[i] = calloc(cm->p, sizeof(double));
             sPowers[i][0] = cm->g[i];
-            double smc = cm->s[i] - cen[getSCell(cm, cm->s[i], Q)];
+            double smc = cm->s[i] - sCen[getSCell(cm, cm->s[i], Q)];
             cm->adds++;
             cm->muls += cm->p;
             for (int k = 1; k < cm->p; k++) {
@@ -174,12 +155,12 @@ double* fastMultiply(CauchyMultiplier* cm) {
 
 
         for (int si = 0; si < Q - 2; si++) {
-            computeTMoment(cm, tMoments, si + 2, si, cen, sMoments);
-            computeTMoment(cm, tMoments, si, si + 2, cen, sMoments);
+            computeTMoment(cm, tMoments, si + 2, si, tCen, sCen, sMoments);
+            computeTMoment(cm, tMoments, si, si + 2, tCen, sCen, sMoments);
         }
         for (int si = 0; si < Q - 2; si += 2) {
-            computeTMoment(cm, tMoments, si + 3, si, cen, sMoments);
-            computeTMoment(cm, tMoments, si, si + 3, cen, sMoments);
+            computeTMoment(cm, tMoments, si + 3, si, tCen, sCen, sMoments);
+            computeTMoment(cm, tMoments, si, si + 3, tCen, sCen, sMoments);
         }
 
 
@@ -197,7 +178,7 @@ double* fastMultiply(CauchyMultiplier* cm) {
         for (int i = 0; i < cm->n; i++) {
             double tPow = 1;
             int ti = getTCell(cm, cm->t[i], Q);
-            double cmt = cen[ti] - cm->t[i];
+            double cmt = tCen[ti] - cm->t[i];
             for (int m = 0; m < cm->p; m++) {
                 f[i] += tMoments[ti][m] * tPow;
                 tPow *= cmt;
@@ -215,7 +196,8 @@ double* fastMultiply(CauchyMultiplier* cm) {
         free(sReverseIndex);
         free(tCellSizes);
         free(tReverseIndex);
-        free(cen);
+        free(sCen);
+        free(tCen);
     }
     return f;
 }
@@ -255,68 +237,4 @@ void freeCauchyMultiplier(CauchyMultiplier* cm) {
     free(cm);
 }
 
-void printVector(double* vec, int len) {
-    printf("[");
-    for (int i = 0; i < len; i++) {
-        printf("%.4e ," , vec[i]);
-    }
-    printf("]\n");
-}
 
-double* generateRandomNVector(int N) {
-    double* f = calloc(N, sizeof(double));
-    for (int i = 0; i < N; i++) {
-        f[i] = (double) rand() / RAND_MAX;
-    }
-    return f;
-}
-void testMultiplyAccuracy(int N) {
-    double* s = generateRandomNVector(N);
-    double* t = generateRandomNVector(N);
-    double* g = generateRandomNVector(N);
-    CauchyMultiplier* cm = newCauchyMultiplier(s, t, g, N, 10);
-    double* fast = fastMultiply(cm);
-    double* slow = slowMultiply(cm);
-    printVector(fast, N);
-    printVector(slow, N);
-    freeCauchyMultiplier(cm);
-}
-void testMultiplySpeed(int N) {
-    double* s = generateRandomNVector(N);
-    double* t = generateRandomNVector(N);
-    double* g = generateRandomNVector(N);
-
-
-    CauchyMultiplier* cm = newCauchyMultiplier(s, t, g, N, 10);
-    struct timespec start, end;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &start);
-    double* fast = fastMultiply(cm);
-
-    clock_gettime(CLOCK_MONOTONIC_RAW, &end);
-
-    long delta = (end.tv_sec - start.tv_sec) * pow(10,9)  +  (end.tv_nsec - start.tv_nsec);
-    double sec = ((double) delta ) / pow(10,9);
-    printf("Took %lf,  \n", sec);
-    printf("Adds:%u \nMuls:%u \n", cm->adds, cm->muls);
-    //double* slow = slowMultiply(cm);
-    //printVector(fast, N);
-    //printVector(slow, N);
-    freeCauchyMultiplier(cm);
-}
-
-int main() {
-    srand(time(NULL));
-    double s[] = {0.0450129590219045, 0.14058320819439485, 0.1523630580433034,
-                  0.3334969196167895, 0.7051533278481288, 0.7657209605120057, 0.9009994392272345, 0.9335046628841073};
-    double t[] = {0.06572442852925431, 0.3853804136623742, 0.4612045175524898,
-                  0.6612689052573647, 0.6922738788833437, 0.7465256805234415, 0.8149811433845008, 0.8530371620489543};
-    double g[] = {0.05297700176067044, 0.18096566993453178, 0.23747267040559616,
-                  0.568132463298329, 0.6383567455540913, 0.7756066277976567, 0.8870273842314716, 0.9643387582918744};
-    int n = 8;
-    int p = 10;
-    CauchyMultiplier* cm = newCauchyMultiplier(s, t, g, n, p);
-    //testMultiply(8);
-    testMultiplySpeed(10);
-    printVector(fastMultiply(cm), cm->n);
-    return 0;
-}
