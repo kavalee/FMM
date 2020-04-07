@@ -23,8 +23,8 @@ typedef struct CauchyMultiplier{
     double sH;
     double tH;
     double** BINOMIAL_CACHE;
-    int adds;
-    int muls;
+    unsigned long adds;
+    unsigned long muls;
 
 
 } CauchyMultiplier;
@@ -33,13 +33,13 @@ int inline getSCell(CauchyMultiplier* cm, double s, int Q) {
     cm->adds++;
     cm->muls += 2;
     double x = (s - cm->sMin)/cm->sH;
-    return MIN( (int) (x * Q), (Q - 1) );
+    return MAX( MIN( (int) (x * Q), (Q - 1)), 0 );
 }
 int inline getTCell(CauchyMultiplier* cm, double t, int Q) {
     cm->adds++;
     cm->muls += 2;
     double x = (t - cm->tMin)/cm->tH;
-    return MIN( (int) (x * Q), (Q - 1) );
+    return MAX( MIN( (int) (x * Q), (Q - 1) ), 0);
 
 }
 
@@ -64,12 +64,17 @@ void printMatrix(double** m, int rows, int cols) {
     }
 }
 void computeTMoment(CauchyMultiplier* cm, double** tMoments, int ti, int si, double* cen, double** sMoments) {
+    double tcsI = 1.0 / (cen[ti] - cen[si]);
+    double powM = 1;
     for (int m = 0; m < cm->p; m++) {
+        double powK = tcsI;
         for (int k = 0; k < cm->p; k++) {
-            tMoments[ti][m] += cm->BINOMIAL_CACHE[m + k][k] * pow(cen[ti] - cen[si], -m - k - 1) * sMoments[si][k];
+            tMoments[ti][m] += cm->BINOMIAL_CACHE[m + k][k] * powK * powM * sMoments[si][k];
             cm->adds += 2;
             cm->muls += 2 + m + k - 1;
+            powK *= tcsI;
         }
+        powM *= tcsI;
     }
 }
 void computeDirect(CauchyMultiplier* cm, double* f, int sSize, int* sIndex, int tSize, int* tIndex) {
@@ -111,19 +116,14 @@ double* fastMultiply(CauchyMultiplier* cm) {
     cm->sMax = cm->s[0];
     cm->tMin = cm->t[0];
     cm->tMax = cm->t[0];
-
-
     for (int i = 1; i < cm->n; i++) {
         cm->sMin = MIN(cm->sMin, cm->s[i]);
         cm->tMin = MIN(cm->tMin, cm->t[i]);
         cm->sMax = MAX(cm->sMax, cm->s[i]);
         cm->tMax = MAX(cm->tMax, cm->t[i]);
     }
-
     cm->sH = cm->sMax - cm->sMin;
     cm->tH = cm->tMax - cm->tMin;
-    printf("%lf\n", cm->sH);
-
 
     int L = (int) log2(cm->n);
     for (int l = 2; l <= L; l++) {
@@ -219,7 +219,6 @@ double* fastMultiply(CauchyMultiplier* cm) {
     }
     return f;
 }
-void updatePowerCache() {}
 void initializeBinomialCache(CauchyMultiplier* cm, int N) {
     cm->BINOMIAL_CACHE = calloc(N, sizeof(double*));
     cm->BINOMIAL_CACHE[0] = calloc(N, sizeof(double*));
@@ -253,6 +252,7 @@ void freeCauchyMultiplier(CauchyMultiplier* cm) {
         free(cm->BINOMIAL_CACHE[i]);
     }
     free(cm->BINOMIAL_CACHE);
+    free(cm);
 }
 
 void printVector(double* vec, int len) {
@@ -297,7 +297,7 @@ void testMultiplySpeed(int N) {
     long delta = (end.tv_sec - start.tv_sec) * pow(10,9)  +  (end.tv_nsec - start.tv_nsec);
     double sec = ((double) delta ) / pow(10,9);
     printf("Took %lf,  \n", sec);
-    printf("Adds:%d \nMuls:%d \n", cm->adds, cm->muls);
+    printf("Adds:%u \nMuls:%u \n", cm->adds, cm->muls);
     //double* slow = slowMultiply(cm);
     //printVector(fast, N);
     //printVector(slow, N);
@@ -316,7 +316,7 @@ int main() {
     int p = 10;
     CauchyMultiplier* cm = newCauchyMultiplier(s, t, g, n, p);
     //testMultiply(8);
-    testMultiplySpeed(100000);
+    testMultiplySpeed(10);
     printVector(fastMultiply(cm), cm->n);
     return 0;
 }
