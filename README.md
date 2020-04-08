@@ -9,5 +9,6 @@ newCauchyMultiplier(double* sources, double* targets, double* input, int n, int 
 # Testing
 Run `make test` to generate error, speed, and flops data which will be outputed to `output` in `.csv` format.
 # Performance
+![errorplot](https://github.com/kavalee/FMM/master/images/error.png)
 
 
