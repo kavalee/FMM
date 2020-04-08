@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "fmm.h"
 #include "util.h"
@@ -13,13 +14,11 @@
 
 
 int inline getSCell(CauchyMultiplier* cm, double s, int Q) {
-    cm->adds++;
-    cm->muls += 2;
+    cm->muls += 1;
     return (int) (s * Q);
 }
 int inline getTCell(CauchyMultiplier* cm, double t, int Q) {
-    cm->adds++;
-    cm->muls += 2;
+    cm->muls += 1;
     return (int) (t * Q);
 
 }
@@ -41,7 +40,6 @@ void computeTMoment(CauchyMultiplier* cm, double** tMoments, int ti, int si, dou
         double powK = tcsI;
         for (int k = 0; k < cm->p; k++) {
             tMoments[ti][m] += (cm->BINOMIAL_CACHE[m + k][k] * powK ) * ( powM * sMoments[si][k] ) ;
-            //tMoments[ti][m] += cm->BINOMIAL_CACHE[m + k][k] * pow(tCen[ti] - sCen[si], -k - m - 1) * sMoments[si][k];
             cm->adds += 2;
             cm->muls += 2 + m + k - 1;
             powK *= tcsI;
@@ -100,8 +98,11 @@ double* fastMultiply(CauchyMultiplier* cm) {
     cm->sH = cm->sMax - cm->sMin;
     cm->tH = cm->tMax - cm->tMin;
 
+    double **sMoments;
+    double* prevSCen;
     int L = (int) log2(cm->n);
-    for (int l = 2; l <= L; l++) {
+    int QF = 2 << (L - 1);
+    for (int l = L; l >= 2; l--) {
         int Q = 2 << (l - 1);
 
         int *sCellSizes = calloc(Q, sizeof(int));
@@ -122,38 +123,68 @@ double* fastMultiply(CauchyMultiplier* cm) {
             tCen[ti] = ((double) ti / ((double) Q) + 1.0 / (double) (2.0 * Q));
         }
 
-        double **sPowers = calloc(cm->n, sizeof(double *));
-        for (int i = 0; i < cm->n; i++) {
-            sPowers[i] = calloc(cm->p, sizeof(double));
-            sPowers[i][0] = cm->g[i];
-            double smc = cm->s[i] - sCen[getSCell(cm, cm->s[i], Q)];
-            cm->adds++;
-            cm->muls += cm->p;
-            for (int k = 1; k < cm->p; k++) {
-                sPowers[i][k] = sPowers[i][k - 1] * smc;
+        if(L == l) {
+            sMoments = calloc(Q, sizeof(double));
+            for (int si = 0; si < Q; si++) {
+                sMoments[si] = calloc(cm->p, sizeof(double));
             }
-        }
-        double **sMoments = calloc(Q, sizeof(double *));
-        cm->adds += cm->n * cm->p;
-        for (int si = 0; si < Q; si++) {
-            sMoments[si] = calloc(cm->p, sizeof(double));
-            for (int i = 0; i < sCellSizes[si]; i++) {
+            cm->adds += (cm->n + 1) * cm->p;
+            cm->muls += cm->n * cm->p;
+            for (int i = 0; i < cm->n; i++) {
+                int si = getSCell(cm, cm->s[i], Q);
+                double smc = cm->s[i] - sCen[si];
+                double powK = cm->g[i];
                 for (int k = 0; k < cm->p; k++) {
-                    sMoments[si][k] += sPowers[sReverseIndex[si][i]][k];
+                    sMoments[si][k] += powK;
+                    powK *= smc;
                 }
             }
+        } else {
+            double** tempSMoments = calloc(Q, sizeof(double*));
+            for (int si = 0; si < Q; si++) {
+                double dcA = prevSCen[2 * si] - sCen[si];
+                double dcB = prevSCen[(2 * si) + 1] - sCen[si];
+                double* powACache = calloc(cm->p, sizeof(double));
+                double* powBCache = calloc(cm->p, sizeof(double));
+                powACache[0] = 1;
+                powBCache[0] = 1;
+                cm->muls += 2 * cm->p;
+                for (int i = 1; i < cm->p; i++) {
+                    powACache[i] = powACache[i - 1] * dcA;
+                    powBCache[i] = powBCache[i - 1] * dcB;
+                }
+                tempSMoments[si] = calloc(cm->p, sizeof(double));
+                for (int k = 0; k < cm->p; k++) {
+                    double sum = 0;
+                    for (int m = 0; m <= k; m++) {
+                        cm->adds += 2;
+                        cm->muls += 3;
+                        sum += cm->BINOMIAL_CACHE[k][m] * (  powACache[k - m] * sMoments[2 * si][m]
+                                                           + powBCache[k - m] * sMoments[(2 * si) + 1][m]);
+                    }
+                    tempSMoments[si][k] = sum;
+                }
+                free(powACache);
+                free(powBCache);
+            }
+
+            for (int i = 0; i < (2 * Q); i++) {
+                free(sMoments[i]);
+            }
+            free(sMoments);
+            sMoments = calloc(Q, sizeof(double*));
+            for (int i = 0; i < Q; i++) {
+                sMoments[i] = calloc(cm->p, sizeof(double));
+                memcpy(sMoments[i], tempSMoments[i], cm->p * sizeof(double));
+                free(tempSMoments[i]);
+            }
+            free(tempSMoments);
         }
-        for (int i = 0; i < cm->n; i++) {
-            free(sPowers[i]);
-        }
-        free(sPowers);
 
         double **tMoments = calloc(Q, sizeof(double *));
         for (int ti = 0; ti < Q; ti++) {
             tMoments[ti] = calloc(cm->p, sizeof(double));
         }
-
-
         for (int si = 0; si < Q - 2; si++) {
             computeTMoment(cm, tMoments, si + 2, si, tCen, sCen, sMoments);
             computeTMoment(cm, tMoments, si, si + 2, tCen, sCen, sMoments);
@@ -162,7 +193,6 @@ double* fastMultiply(CauchyMultiplier* cm) {
             computeTMoment(cm, tMoments, si + 3, si, tCen, sCen, sMoments);
             computeTMoment(cm, tMoments, si, si + 3, tCen, sCen, sMoments);
         }
-
 
         if (L == l) {
             for (int si = 0; si < Q; si++) {
@@ -173,6 +203,7 @@ double* fastMultiply(CauchyMultiplier* cm) {
                 computeDirect(cm, f, sCellSizes[si], sReverseIndex[si], tCellSizes[si + 1], tReverseIndex[si + 1]);
             }
         }
+
         cm->adds += cm->n * cm->p;
         cm->muls += 2 * cm->n * cm->p;
         for (int i = 0; i < cm->n; i++) {
@@ -184,13 +215,19 @@ double* fastMultiply(CauchyMultiplier* cm) {
                 tPow *= cmt;
             }
         }
+
+        if (L != l){
+            free(prevSCen);
+        }
+        prevSCen = calloc(Q, sizeof(double));
+        memcpy(prevSCen, sCen, sizeof(double) * Q);
+
         for (int i = 0; i < Q; i++) {
-            free(sMoments[i]);
             free(tMoments[i]);
             free(sReverseIndex[i]);
             free(tReverseIndex[i]);
         }
-        free(sMoments);
+
         free(tMoments);
         free(sCellSizes);
         free(sReverseIndex);
@@ -199,6 +236,11 @@ double* fastMultiply(CauchyMultiplier* cm) {
         free(sCen);
         free(tCen);
     }
+    for (int i = 0; i < 4; i++) {
+        free(sMoments[i]);
+    }
+    free(sMoments);
+    free(prevSCen);
     return f;
 }
 void initializeBinomialCache(CauchyMultiplier* cm, int N) {
