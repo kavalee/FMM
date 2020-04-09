@@ -5,7 +5,7 @@ Create a `CauchyMultiplier` struct using
 ```C
 newCauchyMultiplier(double* sources, double* targets, double* input, int n, int precision)
 ```
- `double* fastMultiply(CauchyMultiplier cm)` uses the FMM to apply the Cauchy matrix determined by the sources and targets to the input with precision p. When finished with the caluculations free the CauchyMultiplier struct with `freeCauchyMultiplier(CauchyMultiplier cm)`.
+ `double* fastMultiply(CauchyMultiplier cm)` uses the FMM to apply the Cauchy matrix determined by the sources and targets to the input with precision p. When finished with the calculations, free the CauchyMultiplier struct with `freeCauchyMultiplier(CauchyMultiplier cm)`.
 # Testing
 Run `make test` to generate error, speed, and flops data which will be outputed to `output` in `.csv` format.
 # Performance
