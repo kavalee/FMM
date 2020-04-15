@@ -9,9 +9,9 @@ newCauchyMultiplier(double* sources, double* targets, double* input, int n, int 
 ## Testing
 Run `make test` to generate error, speed, and flops data which will be outputed to `output` in `.csv` format.
 ## Performance
-#Number of Levels = log2(n)
+# Number of Levels = log2(n)
 ![errorplot](https://github.com/kavalee/FMM/raw/master/images/error.png)
 ![flopsplot](https://github.com/kavalee/FMM/raw/master/images/flops.png)
 ![speedplot](https://github.com/kavalee/FMM/raw/master/images/speed.png)
-
+# Number of Levels = max(log2(n), 2)
 
