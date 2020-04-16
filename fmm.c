@@ -13,6 +13,8 @@
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 
+
+
 int inline getSCell(CauchyMultiplier* cm, double s, int Q) {
     cm->muls += 1;
     return (int) (s * Q);
@@ -100,7 +102,7 @@ double* fastMultiply(CauchyMultiplier* cm) {
 
     double **sMoments;
     double* prevSCen;
-    int L = (int) log2(cm->n);
+    int L = (int) MAX(log2(cm->n) - 6, 2);
     int QF = 2 << (L - 1);
     for (int l = L; l >= 2; l--) {
         int Q = 2 << (l - 1);

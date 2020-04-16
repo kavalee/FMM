@@ -220,9 +220,9 @@ void generateFlopsData(int N, int num_trials) {
 
 int main() {
     srand(time(NULL));
-    //generateSpeedData(100000, 10);
-    generateErrorData(10000, 10);
-    generateFlopsData(100000, 10);
+    generateSpeedData(100000, 2);
+    generateErrorData(100000, 2);
+    generateFlopsData(100000, 2);
 
     return 0;
 }
