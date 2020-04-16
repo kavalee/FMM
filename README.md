@@ -14,7 +14,7 @@ This implementation uses max(log2(n), 2) levels. Also included are some graphs o
 ![errorplot](https://github.com/kavalee/FMM/raw/master/images/error-6.png)
 ![flopsplot](https://github.com/kavalee/FMM/raw/master/images/flops-6.png)
 ![speedplot](https://github.com/kavalee/FMM/raw/master/images/speed-6.png)
-![accuracy](https://github.com/kavalee/FMM/raw/master/images/accuracy.png)
+![accuracyp](https://github.com/kavalee/FMM/raw/master/images/asymptotic.png)
 ## Number of Levels = log2(n)
 ![errorplot](https://github.com/kavalee/FMM/raw/master/images/error.png)
 ![flopsplot](https://github.com/kavalee/FMM/raw/master/images/flops.png)
