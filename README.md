@@ -9,8 +9,8 @@ newCauchyMultiplier(double* sources, double* targets, double* input, int n, int 
 # Testing
 Run `make test` to generate error, speed, and flops data which will be outputed to `output` in `.csv` format.
 # Performance
-This implementation uses max(log2(n), 2) levels. Also included are some graphs of number of levels being log2(n), just because it is interesting. 
-For matrices of size about 200 and larger this implementation of the fast multipole method uses fewer floating point operations than the naive method (direct multiplication). Interestingly, as far as speed when tested on my computer goes, the degree to which increasing the precision increases the runtime of the program is smaller than expected, while the numbers of flops more properly reflects this increase. The main purpose of the speed plot is to confirm that the flop plot can be trusted.
+This implementation uses max(log2(n), 2) levels. Also included are some graphs log2(n) levels, just because it is interesting. 
+For matrices of size about 200 and larger this implementation of the fast multipole method uses fewer floating point operations than the naive method (direct multiplication). Interestingly, as far as speed when tested on my computer goes, the degree to which increasing the precision increases the runtime of the program is smaller than expected; the numbers of flops more properly reflects this increase. The main purpose of the speed plot is to confirm that the flop plot can be trusted.
 
 This algorithm runs in O(nlogn) time, however it seems to run close to linear time as shown by the plot of flops/n and flops/(nlogn) below (e.g flops/(nlogn) seems to approach a constant while flops/n increases but at a very slow rate). This is most likely due to how in this implementation the source moments are only computed at the finest level, but the Taylor coeffiecients are computed at every level. Since there is O(logn) levels, and the Taylor coeffiecient evaluation is called about 3n times per level, the resulting O(nlogn) behaviour is expected.
 
